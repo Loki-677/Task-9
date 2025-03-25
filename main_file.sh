@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Configuration
-USERNAME="loki67"
+USERNAME="Automation"
 SERVERS_FILE="servers.txt"
 SSH_KEY="/root/.ssh/ohio.pem"
 
