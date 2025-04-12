@@ -1,9 +1,9 @@
 #!/bin/bash
 
 # Configuration
-USERNAME="Automation"
+USERNAME="Loki"
 SERVERS_FILE="servers.txt"
-SSH_KEY="/root/.ssh/ohio.pem"
+SSH_KEY="/root/.ssh/mykey.pem"
 
 # Check if servers file exists
 if [ ! -f "$SERVERS_FILE" ]; then
@@ -42,7 +42,7 @@ done
 create_remote_user() {
     server=$1
     echo "Processing $server:"
-    
+
     # Check if user exists
     if ssh -o StrictHostKeyChecking=no -i "$SSH_KEY" ec2-user@"$server" "sudo id -u $USERNAME" >/dev/null 2>&1; then
         echo " - User $USERNAME already exists"
@@ -53,10 +53,11 @@ create_remote_user() {
         sudo mkdir -p /home/$USERNAME/.ssh && \
         sudo chmod 700 /home/$USERNAME/.ssh && \
         sudo chown $USERNAME:$USERNAME /home/$USERNAME/.ssh" || { echo " - Failed to create user"; return 1; }
-        
+
         echo " - User created successfully"
     fi
-    
+
+
     # Configure authentication
     case $auth_type in
         "Password-based")
@@ -64,19 +65,28 @@ create_remote_user() {
             ssh -o StrictHostKeyChecking=no -i "$SSH_KEY" ec2-user@"$server" \
             "echo '$USERNAME:$hashed_pass' | sudo chpasswd -e" || { echo " - Failed to set password"; return 1; }
             ;;
-    
-        "Key-based")
-    pub_key=$(cat "$pub_key_path")
+
+
+
+	"Key-based")
+    # Copy key to remote server
+    scp -o StrictHostKeyChecking=no -i "$SSH_KEY" "$pub_key_path" ec2-user@"$server":/tmp/mykey.pub || { echo " - SCP transfer failed"; return 1; }
+
+    # Configure key authentication
     ssh -o StrictHostKeyChecking=no -i "$SSH_KEY" ec2-user@"$server" \
     "sudo mkdir -p /home/$USERNAME/.ssh && \
-    echo '$pub_key' | sudo tee /home/$USERNAME/.ssh/authorized_keys > /dev/null && \
+    echo \"$pub_key\" | sudo tee /home/$USERNAME/.ssh/authorized_keys > /dev/null && \
     sudo chown -R $USERNAME:$USERNAME /home/$USERNAME/.ssh && \
     sudo chmod 700 /home/$USERNAME/.ssh && \
     sudo chmod 600 /home/$USERNAME/.ssh/authorized_keys" || { echo " - Failed to add SSH key"; return 1; }
+
+    # Cleanup temporary file
+    ssh -o StrictHostKeyChecking=no -i "$SSH_KEY" ec2-user@"$server" "sudo rm -f /tmp/mykey.pub" || { echo " - Failed to clean up temporary file"; return 1; }
     ;;
 
+
     esac
-    
+
     echo " - Authentication configured successfully"
     return 0
 }
